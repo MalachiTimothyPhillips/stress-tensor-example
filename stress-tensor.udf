@@ -47,8 +47,6 @@ void UDF_LoadKernels(occa::properties& kernelInfo)
 
 void UDF_Setup0(MPI_Comm comm, setupAide &options)
 {
-  options.getArgs("CI-MODE", ciMode);
-  if (ciMode) ciSetup(comm, options);
   platform->par->extract("casedata", "p_delta", P_DELTA);
   platform->par->extract("casedata", "p_gamma", P_GAMMA);
   if (platform->options.compareArgs("BUILD ONLY", "FALSE")) {
@@ -89,12 +87,11 @@ void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
                                     nrs->o_mue,
                                     mesh->o_invLMM,
                                     nrs->o_U,
-                                    o_stress)
+                                    o_stress);
   oogs::startFinish(o_stress, 9, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
 
   if (nrs->isOutputStep) {
     nek::ocopyToNek(time, tstep);
     nek::userchk();
   }
-  if (ciMode) ciTestErrors(nrs, time, tstep);
 }

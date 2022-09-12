@@ -88,8 +88,8 @@ void scalarDirichletConditions(bcData *bc)
             for(int l = 0 ; l < p_Nq; ++l){
               const dlong other_id = e * p_Np + l * p_Nq * p_Nq + j * p_Nq + i;
               s_Uloc[l] = U[other_id + 0 * offset];
-              s_Vloc[l] = V[other_id + 1 * offset];
-              s_Wloc[l] = W[other_id + 2 * offset];
+              s_Vloc[l] = U[other_id + 1 * offset];
+              s_Wloc[l] = U[other_id + 2 * offset];
             }
           }
         }
@@ -111,7 +111,6 @@ void scalarDirichletConditions(bcData *bc)
           const dfloat dtdy = vgeo[gid + p_TYID * p_Np];
           const dfloat dtdz = vgeo[gid + p_TZID * p_Np];
           const dfloat JW   = vgeo[gid + p_JWID * p_Np];
-          const dfloat invMass = invLMM[id];
 
           dfloat dUdr  = 0.f, dUds  = 0.f, dUdt  = 0.f;
           dfloat dVdr  = 0.f, dVds  = 0.f, dVdt  = 0.f;
@@ -137,17 +136,20 @@ void scalarDirichletConditions(bcData *bc)
           }
 
           const dlong id = e * p_Np + k * p_Nq * p_Nq + j * p_Nq + i;
-          stress[id + 0 * offset] = invMass * JW * (drdx * dUdr + dsdx * dUds + dtdx * dUdt);
-          stress[id + 1 * offset] = invMass * JW * (drdy * dUdr + dsdy * dUds + dtdy * dUdt);
-          stress[id + 2 * offset] = invMass * JW * (drdz * dUdr + dsdz * dUds + dtdz * dUdt);
+          const dfloat invMass = invLMM[id];
+          const dfloat mu = viscosity[id];
+          const dfloat multiplier = invMass * JW * mu;
+          stress[id + 0 * offset] = multiplier * (drdx * dUdr + dsdx * dUds + dtdx * dUdt);
+          stress[id + 1 * offset] = multiplier * (drdy * dUdr + dsdy * dUds + dtdy * dUdt);
+          stress[id + 2 * offset] = multiplier * (drdz * dUdr + dsdz * dUds + dtdz * dUdt);
 
-          stress[id + 3 * offset] = invMass * JW * (drdx * dVdr + dsdx * dVds + dtdx * dVdt);
-          stress[id + 4 * offset] = invMass * JW * (drdy * dVdr + dsdy * dVds + dtdy * dVdt);
-          stress[id + 5 * offset] = invMass * JW * (drdz * dVdr + dsdz * dVds + dtdz * dVdt);
+          stress[id + 3 * offset] = multiplier * (drdx * dVdr + dsdx * dVds + dtdx * dVdt);
+          stress[id + 4 * offset] = multiplier * (drdy * dVdr + dsdy * dVds + dtdy * dVdt);
+          stress[id + 5 * offset] = multiplier * (drdz * dVdr + dsdz * dVds + dtdz * dVdt);
 
-          stress[id + 6 * offset] = invMass * JW * (drdx * dWdr + dsdx * dWds + dtdx * dWdt);
-          stress[id + 7 * offset] = invMass * JW * (drdy * dWdr + dsdy * dWds + dtdy * dWdt);
-          stress[id + 8 * offset] = invMass * JW * (drdz * dWdr + dsdz * dWds + dtdz * dWdt);
+          stress[id + 6 * offset] = multiplier * (drdx * dWdr + dsdx * dWds + dtdx * dWdt);
+          stress[id + 7 * offset] = multiplier * (drdy * dWdr + dsdy * dWds + dtdy * dWdt);
+          stress[id + 8 * offset] = multiplier * (drdz * dWdr + dsdz * dWds + dtdz * dWdt);
         }
       }
       @barrier("local");
