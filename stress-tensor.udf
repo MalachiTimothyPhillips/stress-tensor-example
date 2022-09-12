@@ -1,0 +1,100 @@
+//
+// nekRS User Defined File
+//
+#include <math.h>
+#include "udf.hpp"
+#include "plugins/lowMach.hpp"
+
+static occa::kernel userQKernel;
+static occa::kernel userVpKernel;
+static occa::kernel stressTensorKernel;
+
+static dfloat P_DELTA;
+static dfloat P_GAMMA;
+
+void qtl(nrs_t* nrs, dfloat time, occa::memory o_div)
+{
+  lowMach::qThermalIdealGasSingleComponent(time, o_div);
+}
+
+
+void userq(nrs_t *nrs, dfloat time, occa::memory o_S, occa::memory o_FS)
+{
+  cds_t *cds   = nrs->cds;
+  mesh_t *mesh = cds->mesh[0];
+  userQKernel(mesh->Nelements, mesh->o_x, o_FS);
+}
+
+void uservp(nrs_t *nrs, dfloat time, occa::memory o_U, occa::memory o_S,
+            occa::memory o_UProp, occa::memory o_SProp)
+{
+  mesh_t *mesh = nrs->meshV;
+
+  userVpKernel(mesh->Nelements, nrs->fieldOffset, nrs->cds->fieldOffset[0], 
+               o_S, o_UProp, o_SProp);
+}
+
+/* UDF Functions */                                                      
+
+void UDF_LoadKernels(occa::properties& kernelInfo)
+{
+  kernelInfo["defines/p_DELTA"] = P_DELTA;
+  userQKernel = oudfBuildKernel(kernelInfo, "userQ");
+  userVpKernel = oudfBuildKernel(kernelInfo, "userVp");
+  stressTensorKernel = oudfBuildKernel(kernelInfo, "stressTensor");
+  lowMach::buildKernel(kernelInfo);
+}
+
+void UDF_Setup0(MPI_Comm comm, setupAide &options)
+{
+  options.getArgs("CI-MODE", ciMode);
+  if (ciMode) ciSetup(comm, options);
+  platform->par->extract("casedata", "p_delta", P_DELTA);
+  platform->par->extract("casedata", "p_gamma", P_GAMMA);
+  if (platform->options.compareArgs("BUILD ONLY", "FALSE")) {
+    double* const nek_cb_scnrs = (double*) nek::ptr("cb_scnrs");
+    nek_cb_scnrs[0] = P_DELTA;
+    nek_cb_scnrs[1] = P_GAMMA;
+  }
+}
+
+void UDF_Setup(nrs_t *nrs)
+{
+  udf.sEqnSource = &userq;
+  udf.properties = &uservp;
+
+  lowMach::setup(nrs, P_GAMMA);
+  udf.div = &qtl;
+}
+
+void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
+{
+  // scalar 0 is temperature
+  // remaining 9 scalars are stress stored as
+  // 1: mu dU/dx
+  // 2: mu dU/dy
+  // 3: mu dU/dz
+  // 4: mu dV/dx
+  // 5: mu dV/dy
+  // 6: mu dV/dz
+  // 7: mu dW/dx
+  // 8: mu dW/dy
+  // 9: mu dW/dz
+  auto * mesh = nrs->meshV;
+  auto o_stress = nrs->cds->o_S + nrs->cds->fieldOffsetScan[1] * sizeof(dfloat);
+  stressTensorKernel(mesh->Nelements,
+                                    mesh->o_vgeo,
+                                    mesh->o_D,
+                                    nrs->fieldOffset,
+                                    nrs->o_mue,
+                                    mesh->o_invLMM,
+                                    nrs->o_U,
+                                    o_stress)
+  oogs::startFinish(o_stress, 9, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
+
+  if (nrs->isOutputStep) {
+    nek::ocopyToNek(time, tstep);
+    nek::userchk();
+  }
+  if (ciMode) ciTestErrors(nrs, time, tstep);
+}
