@@ -90,6 +90,21 @@ void UDF_ExecuteStep(nrs_t *nrs, dfloat time, int tstep)
                                     o_stress);
   oogs::startFinish(o_stress, 9, nrs->fieldOffset, ogsDfloat, ogsAdd, nrs->gsh);
 
+  // here's how to access the fields later on...
+  // note access is based on o_stress, not cds->o_S
+  // this removes an annoying off-by-one from storing the temperature
+  auto o_mudUdx = o_stress + 0 * nrs->fieldOffset * sizeof(dfloat);
+  auto o_mudUdy = o_stress + 1 * nrs->fieldOffset * sizeof(dfloat);
+  auto o_mudUdz = o_stress + 2 * nrs->fieldOffset * sizeof(dfloat);
+
+  auto o_mudVdx = o_stress + 3 * nrs->fieldOffset * sizeof(dfloat);
+  auto o_mudVdy = o_stress + 4 * nrs->fieldOffset * sizeof(dfloat);
+  auto o_mudVdz = o_stress + 5 * nrs->fieldOffset * sizeof(dfloat);
+
+  auto o_mudWdx = o_stress + 6 * nrs->fieldOffset * sizeof(dfloat);
+  auto o_mudWdy = o_stress + 7 * nrs->fieldOffset * sizeof(dfloat);
+  auto o_mudWdz = o_stress + 8 * nrs->fieldOffset * sizeof(dfloat);
+
   if (nrs->isOutputStep) {
     nek::ocopyToNek(time, tstep);
     nek::userchk();
